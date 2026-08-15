@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Futures Gap Screener — Binance Perpetuals</title>
+<meta name="description" content="Screen every Binance USDⓈ-M perpetual for gap-up green candles on 15m & 1d, ranked by % change.">
+<style>html{color-scheme:dark}</style>
+</head>
+<body>
+<style>
+:root{
+  --bg:#0a0d13; --panel:#121927; --panel2:#0e1420; --border:#1e2a3a; --border2:#243142;
+  --text:#d3dbe6; --dim:#5f7086; --dim2:#8b9bb0;
+  --green:#16c784; --red:#ea3943; --gold:#f0b90b;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:left}
+#app{max-width:1340px;margin:0 auto;padding:14px 14px 40px}
+header{display:flex;align-items:center;gap:14px;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:14px;padding:12px 16px;box-shadow:0 4px 24px rgba(0,0,0,.35)}
+.logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#f0b90b,#f8d33a);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;color:#181818;flex:none}
+h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.2px}
+h1 small{display:block;color:var(--dim);font-size:11px;font-weight:500;margin-top:2px}
+.hdr-right{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.statusrow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim2)}
+.dot{width:9px;height:9px;border-radius:50%;background:#475569;flex:none}
+.dot.ok{background:var(--green);box-shadow:0 0 10px var(--green)}
+.dot.warn{background:var(--gold);box-shadow:0 0 10px var(--gold)}
+.dot.err{background:var(--red);box-shadow:0 0 10px var(--red)}
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin:12px 0}
+.ctl{display:flex;flex-direction:column;gap:3px}
+.ctl label{font-size:11px;color:var(--dim2);text-transform:uppercase;letter-spacing:.4px}
+.chk{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--dim2);padding-bottom:6px;user-select:none;white-space:nowrap}
+input[type=number],select,input[type=text]{background:#0c1220;border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:7px 9px;font-size:13px;min-width:0}
+input[type=number]{width:72px}
+input[type=text]{width:120px}
+select{cursor:pointer}
+.chk input{accent-color:var(--gold)}
+.btn{background:linear-gradient(180deg,#f0b90b,#d9a40a);color:#181818;border:none;border-radius:8px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.spin::before{content:'';display:inline-block;width:12px;height:12px;border:2px solid rgba(24,24,24,.35);border-top-color:#181818;border-radius:50%;margin-right:7px;vertical-align:-2px;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.note{width:100%;font-size:11.5px;color:var(--dim);margin-top:2px}
+.note b{color:var(--dim2)}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:12.5px;color:var(--dim2);margin:0 0 10px}
+.stats b{color:var(--text);font-variant-numeric:tabular-nums}
+.stats .g b{color:var(--green)} .stats .red b{color:var(--red)}
+.stats .push{margin-left:auto}
+.tablewrap{background:var(--panel2);border:1px solid var(--border);border-radius:14px;overflow:auto;max-height:calc(100vh - 270px);min-height:220px;box-shadow:0 4px 24px rgba(0,0,0,.25)}
+table{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
+thead th{position:sticky;top:0;background:#16202f;z-index:2;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim2);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--border2);white-space:nowrap;user-select:none}
+thead th.sortable{cursor:pointer}
+thead th.sortable:hover{color:var(--gold)}
+thead th.sorted{color:var(--gold)}
+thead th.sorted::after{content:attr(data-arrow);margin-left:4px;font-weight:800}
+tbody td{padding:8px 10px;border-bottom:1px solid #121a28;font-size:12.5px;white-space:nowrap}
+tbody tr:nth-child(even){background:rgba(255,255,255,.012)}
+tbody tr:hover{background:rgba(240,185,11,.05)}
+tbody tr.hit{background:rgba(240,185,11,.045);box-shadow:inset 3px 0 0 var(--gold)}
+th.al-r,td.al-r{text-align:right}
+th.al-l,td.al-l{text-align:left}
+th.al-c,td.al-c{text-align:center}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.g{color:var(--green)} .red{color:var(--red)} .dim{color:var(--dim)}
+.g.strong{color:var(--green);font-weight:700;background:rgba(22,199,132,.12);border-radius:6px;padding:2px 6px}
+a{color:var(--text);text-decoration:none}
+tbody a:hover{color:var(--gold)}
+.chip{font-style:normal;font-size:9px;font-weight:800;border-radius:5px;padding:2px 5px;margin-left:5px;vertical-align:1px;letter-spacing:.5px}
+.chip.c15{background:rgba(22,199,132,.15);color:var(--green);border:1px solid rgba(22,199,132,.4)}
+.chip.c1d{background:rgba(240,185,11,.12);color:var(--gold);border:1px solid rgba(240,185,11,.4)}
+.mini{display:block;font-size:10px;text-align:center;margin-top:2px;color:var(--dim)}
+.mini.g{color:var(--green)} .mini.red{color:var(--red)}
+.empty{text-align:center;color:var(--dim);padding:40px 10px!important;font-size:13px}
+.footer{margin-top:10px;font-size:11px;color:var(--dim);line-height:1.6}
+.footer b{color:var(--dim2)}
+@media(max-width:900px){ .tablewrap{max-height:none} }
+</style>
+
+<div id="app">
+  <header>
+    <div class="logo">FG</div>
+    <div>
+      <h1>Futures Gap Screener <small>Binance USDⓈ-M perpetuals · 15m &amp; 1d candles</small></h1>
+    </div>
+    <div class="hdr-right">
+      <div class="statusrow"><span id="statusDot" class="dot warn"></span><span id="statusText">connecting…</span></div>
+      <div class="statusrow">API weight <b id="weightText">0</b>/1200</div>
+    </div>
+  </header>
+
+  <section class="controls">
+    <div class="ctl"><label>Gap candles ago</label><input id="offsetInput" type="number" min="1" max="20" value="3"></div>
+    <div class="ctl"><label>Min gap up %</label><input id="minGapInput" type="number" step="0.05" min="0" value="0"></div>
+    <label class="chk"><input id="greenChk" type="checkbox" checked>Gap candle green</label>
+    <label class="chk"><input id="nextChk" type="checkbox" checked>Next candle green</label>
+    <div class="ctl"><label>Rank by</label><select id="rankSel"></select></div>
+    <div class="ctl"><label>Show</label>
+      <select id="filterSel">
+        <option value="all">All symbols</option>
+        <option value="either" selected>Signals · 15m or 1d</option>
+        <option value="15m">Signals · 15m only</option>
+        <option value="1d">Signals · 1d only</option>
+      </select>
+    </div>
+    <div class="ctl"><label>Auto-refresh</label>
+      <select id="refreshSel">
+        <option value="30000">30 s</option>
+        <option value="60000" selected>60 s</option>
+        <option value="120000">2 min</option>
+        <option value="300000">5 min</option>
+        <option value="0">Off</option>
+      </select>
+    </div>
+    <div class="ctl"><label>Search</label><input id="searchInput" type="text" placeholder="BTC, ETH…"></div>
+    <button id="refreshBtn" class="btn">Refresh now</button>
+    <div class="note">Gap up = candle opens <b>above</b> the previous candle's close (open − prev close &gt; 0). The screener checks the candle <b>N candles back</b> (default 3) on each timeframe, requires it to be green, and optionally the following candle green too. Gold left edge = signal hit.</div>
+  </section>
+
+  <section class="stats">
+    <span>Symbols <b id="statSymbols">–</b></span>
+    <span class="g">15m signals <b id="stat15">0</b></span>
+    <span class="red">1d signals <b id="stat1d">0</b></span>
+    <span>Showing <b id="statShown">0</b></span>
+    <span class="push" id="scanProgress" style="color:var(--dim)">idle</span>
+    <span>Updated <b id="lastUpdate">–</b></span>
+    <span id="countdownEl" style="color:var(--dim)"></span>
+  </section>
+
+  <div class="tablewrap">
+    <table id="tbl">
+      <thead><tr>
+        <th>#</th>
+        <th class="al-l">Symbol</th>
+        <th class="al-r sortable" data-key="price">Price</th>
+        <th class="al-r sortable" data-key="24h">24h %</th>
+        <th class="al-r sortable" data-key="gap.15m">15m GAP ↑</th>
+        <th class="al-r sortable" data-key="candle.15m">15m Candle</th>
+        <th class="al-r sortable" data-key="gap.1d">1d GAP ↑</th>
+        <th class="al-r sortable" data-key="candle.1d">1d Candle</th>
+        <th class="al-c">15m</th>
+        <th class="al-c">1d</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer">Data: Binance USDⓈ-M futures public REST API (klines + 24hr ticker). <b>GAP</b> = % of this candle's open above the previous close. <b>Candle</b> = % from open to close. Both read at the selected offset (default: 3 candles back). Mini chart = last 6 closes; number under it = current forming candle. Not financial advice.</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const BASE = 'https://fapi.binance.com';
+const TIMEFRAMES = ['15m', '1d'];
+const KLINES_LIMIT = 30;
+const CONCURRENCY = 16;
+const byId = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const el = {
+  offsetInput: byId('offsetInput'), minGapInput: byId('minGapInput'),
+  greenChk: byId('greenChk'), nextChk: byId('nextChk'),
+  rankSel: byId('rankSel'), filterSel: byId('filterSel'),
+  refreshSel: byId('refreshSel'), searchInput: byId('searchInput'),
+  refreshBtn: byId('refreshBtn'), tbody: byId('tbody'), tbl: byId('tbl'),
+  statSymbols: byId('statSymbols'), stat15: byId('stat15'), stat1d: byId('stat1d'),
+  statShown: byId('statShown'), lastUpdate: byId('lastUpdate'),
+  scanProgress: byId('scanProgress'), statusDot: byId('statusDot'),
+  statusText: byId('statusText'), weightText: byId('weightText'),
+  countdownEl: byId('countdownEl'),
+};
+
+const state = {
+  data: [], sortKey: '24h', sortDir: -1,
+  loading: false, usedWeight: 0, useSuperFetch: false,
+  failed: 0, lastRefresh: 0, nextAt: 0,
+};
+
+function setStatus(text, cls){
+  el.statusText.textContent = text;
+  el.statusDot.className = 'dot' + (cls ? ' ' + cls : '');
+}
+
+function fmtPct(x, dp){
+  if (x == null || !isFinite(x)) return '—';
+  dp = dp || 2;
+  return (x > 0 ? '+' : '') + x.toFixed(dp) + '%';
+}
+function cls(x){
+  if (x == null || !isFinite(x)) return 'dim';
+  return x > 0 ? 'g' : 'red';
+}
+function fmtPrice(p){
+  if (p == null || !isFinite(p)) return '—';
+  if (p >= 1) return p.toLocaleString('en-US', {maximumFractionDigits: 2});
+  return p.toPrecision(4);
+}
+function compactNum(v){
+  if (v == null || !isFinite(v)) return '—';
+  const a = Math.abs(v);
+  if (a >= 1e9) return (v/1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return (v/1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return (v/1e3).toFixed(2) + 'K';
+  return v.toFixed(2);
+}
+function sparkline(closes){
+  if (!closes || closes.length < 2) return '—';
+  const w = 64, h = 20, pad = 1;
+  let min = Infinity, max = -Infinity;
+  for (const c of closes){ if (c < min) min = c; if (c > max) max = c; }
+  const rng = (max - min) || 1;
+  const pts = closes.map((c, i) => [
+    pad + i * (w - 2*pad) / (closes.length - 1),
+    h - pad - ((c - min) / rng) * (h - 2*pad)
+  ]);
+  const d = 'M' + pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L');
+  const up = closes[closes.length - 1] >= closes[0];
+  const color = up ? '#16c784' : '#ea3943';
+  return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '"><path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+
+async function apiGet(url, retries){
+  retries = retries || 4;
+  for (let attempt = 0; attempt < retries; attempt++){
+    try {
+      const res = await fetch(url);
+      if (res.status === 429 || res.status === 418){
+        bucket.rate = Math.max(4, Math.floor(bucket.rate / 2));
+        bucket.slowedAt = Date.now();
+        const wa = parseInt(res.headers.get('retry-after') || '0', 10);
+        await sleep(Math.max(wa, 8) * 1000);
+        continue;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      state.usedWeight = parseInt(res.headers.get('x-mbx-used-weight-1m') || '0', 10) || 0;
+      return await res.json();
+    } catch(e){
+      if (attempt < retries - 1) await sleep(1000 * (attempt + 1));
+      else throw e;
+    }
+  }
+  throw new Error('request failed');
+}
+
+const bucket = { count: 0, resetAt: 0, rate: 30, slowedAt: 0 };
+
+async function pace(){
+  while (true){
+    const now = Date.now();
+    if (bucket.slowedAt && now - bucket.slowedAt > 20000 && bucket.rate < 30){
+      bucket.rate = Math.min(30, bucket.rate + 5);
+      if (bucket.rate >= 30) bucket.slowedAt = 0;
+    }
+    if (now > bucket.resetAt){ bucket.count = 0; bucket.resetAt = now + 1000; }
+    if (bucket.count < bucket.rate){ bucket.count++; return; }
+    await sleep(50);
+  }
+}
+
+async function mapConcurrent(items, n, fn){
+  const out = new Array(items.length);
+  let idx = 0;
+  async function worker(){
+    while (idx < items.length){
+      const i = idx++;
+      out[i] = await fn(items[i], i);
+    }
+  }
+  const workers = [];
+  for (let w = 0; w < Math.min(n, items.length); w++) workers.push(worker());
+  await Promise.all(workers);
+  return out;
+}
+
+const SYM_CACHE_KEY = 'fgs_symbols_v1';
+const SYM_CACHE_MS = 6 * 3600 * 1000;
+
+async function getSymbols(){
+  try {
+    const c = JSON.parse(localStorage.getItem(SYM_CACHE_KEY) || 'null');
+    if (c && Date.now() - c.t <= SYM_CACHE_MS && Array.isArray(c.list) && c.list.length) return c.list;
+  } catch(e){}
+  const ex = await apiGet(BASE + '/fapi/v1/exchangeInfo');
+  const list = (ex.symbols || []).filter(s =>
+    s.status === 'TRADING' && s.quoteAsset === 'USDT' && (s.contractType === 'PERPETUAL' || !s.contractType)
+  ).sort((a, b) => a.symbol.localeCompare(b.symbol));
+  try { localStorage.setItem(SYM_CACHE_KEY, JSON.stringify({t: Date.now(), list: list})); } catch(e){}
+  return list;
+}
+
+function analyze(candles, offset){
+  if (!Array.isArray(candles) || candles.length < offset + 2) return null;
+  const n = candles.length;
+  const gi = n - 1 - offset;
+  const g = candles[gi], p = candles[gi - 1], nx = candles[gi + 1], last = candles[n - 1];
+  const o = +g[1], c = +g[4], pc = +p[4];
+  return {
+    gapPct: (o / pc - 1) * 100,
+    candlePct: (c / o - 1) * 100,
+    green: c > o,
+    nextGreen: nx ? (+nx[4] > +nx[1]) : null,
+    lastPct: (+last[4] / +last[1] - 1) * 100,
+    lastClose: +last[4],
+    openTime: +g[0],
+    open: o, close: c, high: +g[2], low: +g[3], prevClose: pc,
+    volume: +g[7],
+    closes: candles.slice(-6).map(k => +k[4]),
+  };
+}
+
+function pass(sig, cfg){
+  if (!sig) return false;
+  if (!(sig.gapPct > cfg.minGapPct)) return false;
+  if (cfg.green && !sig.green) return false;
+  if (cfg.nextGreen && sig.nextGreen !== true) return false;
+  return true;
+}
+
+function getConfig(){
+  const off = parseInt(el.offsetInput.value, 10);
+  return {
+    offset: Math.max(1, Math.min(20, isFinite(off) ? off : 3)),
+    minGapPct: parseFloat(el.minGapInput.value) || 0,
+    green: el.greenChk.checked,
+    nextGreen: el.nextChk.checked,
+  };
+}
+
+function rankValue(r, key){
+  if (key === '24h') return r.tick24h;
+  if (key === 'price') return r.price;
+  const dot = key.indexOf('.');
+  if (dot < 0) return null;
+  const metric = key.slice(0, dot), tf = key.slice(dot + 1);
+  const sig = tf === '15m' ? r.sig15 : r.sig1d;
+  if (!sig) return null;
+  if (metric === 'gap') return sig.gapPct;
+  if (metric === 'candle') return sig.candlePct;
+  if (metric === 'last') return sig.lastPct;
+  return null;
+}
+
+function tooltip(r){
+  const lines = [];
+  for (const pair of [['15m', r.sig15], ['1d', r.sig1d]]){
+    const sig = pair[1];
+    if (!sig) continue;
+    lines.push(pair[0].toUpperCase() + ' gap candle @ ' + new Date(sig.openTime).toLocaleString());
+    lines.push('  open ' + sig.open + ' · prev close ' + sig.prevClose + ' (' + fmtPct(sig.gapPct) + ')');
+    lines.push('  close ' + sig.close + ' (' + fmtPct(sig.candlePct) + (sig.green ? ', green' : ', red') + ')');
+    lines.push('  next candle ' + (sig.nextGreen == null ? 'n/a' : sig.nextGreen ? 'green ✓' : 'red ✗') + ' · vol ' + compactNum(sig.volume) + ' USDT');
+  }
+  return lines.join(' | ');
+}
+
+function computeRow(d, cfg){
+  const sig15 = analyze(d.k15, cfg.offset);
+  const sig1d = analyze(d.k1d, cfg.offset);
+  return {
+    symbol: d.symbol, base: d.base, price: d.price, tick24h: d.tick24h,
+    sig15: sig15, sig1d: sig1d,
+    pass15: pass(sig15, cfg),
+    pass1d: pass(sig1d, cfg),
+  };
+}
+
+function gapCellCls(sig, pass){
+  if (pass) return 'g strong';
+  if (sig && sig.gapPct > 0) return '';
+  return 'dim';
+}
+
+function renderRows(rows){
+  if (!rows.length){
+    el.tbody.innerHTML = '<tr><td colspan="10" class="empty">No symbols match. Adjust filters / search, or wait for the next 15m or daily candle to close.</td></tr>';
+    return;
+  }
+  el.tbody.innerHTML = rows.map(function(r, i){
+    const hit = r.pass15 || r.pass1d;
+    const chips = (r.pass15 ? '<i class="chip c15">15m</i>' : '') + (r.pass1d ? '<i class="chip c1d">1d</i>' : '');
+    const sp15 = sparkline(r.sig15 ? r.sig15.closes : null);
+    const sp1d = sparkline(r.sig1d ? r.sig1d.closes : null);
+    const mini15 = r.sig15 ? '<span class="mini ' + cls(r.sig15.lastPct) + '">' + fmtPct(r.sig15.lastPct) + '</span>' : '';
+    const mini1d = r.sig1d ? '<span class="mini ' + cls(r.sig1d.lastPct) + '">' + fmtPct(r.sig1d.lastPct) + '</span>' : '';
+    const ttl = tooltip(r).replace(/"/g, '&quot;');
+    return '<tr' + (hit ? ' class="hit"' : '') + '>' +
+      '<td class="dim">' + (i + 1) + '</td>' +
+      '<td class="al-l"><a href="https://www.binance.com/en/futures/' + r.symbol + '" target="_blank" rel="noopener" title="' + ttl + '">' + r.symbol + '</a>' + chips + '</td>' +
+      '<td class="al-r mono">' + fmtPrice(r.price) + '</td>' +
+      '<td class="al-r mono ' + cls(r.tick24h) + '">' + fmtPct(r.tick24h) + '</td>' +
+      '<td class="al-r mono ' + gapCellCls(r.sig15, r.pass15) + '">' + fmtPct(r.sig15 ? r.sig15.gapPct : null) + '</td>' +
+      '<td class="al-r mono ' + cls(r.sig15 ? r.sig15.candlePct : null) + '">' + fmtPct(r.sig15 ? r.sig15.candlePct : null) + '</td>' +
+      '<td class="al-r mono ' + gapCellCls(r.sig1d, r.pass1d) + '">' + fmtPct(r.sig1d ? r.sig1d.gapPct : null) + '</td>' +
+      '<td class="al-r mono ' + cls(r.sig1d ? r.sig1d.candlePct : null) + '">' + fmtPct(r.sig1d ? r.sig1d.candlePct : null) + '</td>' +
+      '<td class="al-c">' + sp15 + mini15 + '</td>' +
+      '<td class="al-c">' + sp1d + mini1d + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function updateSortHeader(){
+  const ths = el.tbl.querySelectorAll('th[data-key]');
+  ths.forEach(function(th){
+    const active = th.dataset.key === state.sortKey;
+    th.classList.toggle('sorted', active);
+    th.dataset.arrow = active ? (state.sortDir < 0 ? '↓' : '↑') : '';
+  });
+}
+
+function applyFilters(){
+  const cfg = getConfig();
+  const q = el.searchInput.value.trim().toLowerCase();
+  const mode = el.filterSel.value;
+  const computed = state.data.map(d => computeRow(d, cfg));
+  let rows = computed.filter(function(r){
+    if (q && !(r.symbol.toLowerCase().indexOf(q) >= 0 || (r.base || '').toLowerCase().indexOf(q) >= 0)) return false;
+    if (mode === '15m') return r.pass15;
+    if (mode === '1d') return r.pass1d;
+    return r.pass15 || r.pass1d;
+  });
+  rows = rows.slice().sort(function(a, b){
+    const av = rankValue(a, state.sortKey);
+    const bv = rankValue(b, state.sortKey);
+    const ax = av == null ? -Infinity : av;
+    const bx = bv == null ? -Infinity : bv;
+    if (ax === bx) return a.symbol.localeCompare(b.symbol);
+    return (ax - bx) * state.sortDir;
+  });
+  el.stat15.textContent = computed.filter(function(r){ return r.pass15; }).length;
+  el.stat1d.textContent = computed.filter(function(r){ return r.pass1d; }).length;
+  el.statShown.textContent = rows.length;
+  renderRows(rows);
+  updateSortHeader();
+}
+
+async function refresh(){
+  if (state.loading) return;
+  state.loading = true;
+  state.fetched = 0;
+  state.failed = 0;
+  el.refreshBtn.disabled = true;
+  el.refreshBtn.classList.add('spin');
+  el.scanProgress.textContent = 'connecting…';
+  const started = Date.now();
+  try {
+    const cfg = getConfig();
+    const symbols = await getSymbols();
+    el.statSymbols.textContent = symbols.length;
+    el.scanProgress.textContent = 'loading 24h ticker…';
+    const ticker = await apiGet(BASE + '/fapi/v1/ticker/24hr');
+    const tickerMap = {};
+    for (const t of (Array.isArray(ticker) ? ticker : [])) tickerMap[t.symbol] = t;
+
+    const tasks = [];
+    for (const s of symbols){
+      for (const tf of TIMEFRAMES) tasks.push({symbol: s.symbol, tf: tf});
+    }
+    el.scanProgress.textContent = 'scanning 0/' + tasks.length;
+    const results = await mapConcurrent(tasks, CONCURRENCY, async function(task){
+      await pace();
+      try {
+        const k = await apiGet(BASE + '/fapi/v1/klines?symbol=' + task.symbol + '&interval=' + task.tf + '&limit=' + KLINES_LIMIT);
+        state.fetched++;
+        if (state.fetched % 40 === 0) el.scanProgress.textContent = 'scanning ' + state.fetched + '/' + tasks.length;
+        return {symbol: task.symbol, tf: task.tf, k: k};
+      } catch(e){
+        state.failed++;
+        return {symbol: task.symbol, tf: task.tf, k: null};
+      }
+    });
+
+    const kMap = {};
+    for (const r of results){
+      if (!Array.isArray(r.k) || !r.k.length) continue;
+      kMap[r.symbol] = kMap[r.symbol] || {};
+      kMap[r.symbol][r.tf] = r.k;
+    }
+
+    state.data = symbols.map(function(s){
+      const tick = tickerMap[s.symbol];
+      const k15 = kMap[s.symbol] && kMap[s.symbol]['15m'];
+      const k1d = kMap[s.symbol] && kMap[s.symbol]['1d'];
+      let price = null;
+      if (tick) price = parseFloat(tick.lastPrice);
+      else if (k15 && k15.length) price = +k15[k15.length - 1][4];
+      return {
+        symbol: s.symbol, base: s.baseAsset, price: price,
+        tick24h: tick ? parseFloat(tick.priceChangePercent) : null,
+        k15: k15, k1d: k1d,
+      };
+    });
+
+    state.lastRefresh = Date.now();
+    el.lastUpdate.textContent = new Date().toLocaleTimeString();
+    applyFilters();
+    const secs = ((Date.now() - started) / 1000).toFixed(1);
+    el.scanProgress.textContent = 'done in ' + secs + 's' + (state.failed ? ' · ' + state.failed + ' symbols failed' : '');
+    setStatus('live', 'ok');
+  } catch(e){
+    console.error(e);
+    el.scanProgress.textContent = 'error';
+    const msg = (e && e.message) ? e.message : String(e);
+    setStatus('error: ' + msg, 'err');
+    if (/451/.test(msg)) setStatus('HTTP 451 — Binance is geo-blocking your region. Try a VPN.', 'err');
+  } finally {
+    state.loading = false;
+    el.refreshBtn.disabled = false;
+    el.refreshBtn.classList.remove('spin');
+  }
+}
+
+function buildRankOptions(){
+  const opts = [{v: '24h', l: '24h change %'}];
+  for (const tf of TIMEFRAMES){
+    opts.push({v: 'gap.' + tf, l: tf + ' gap-up %'});
+    opts.push({v: 'candle.' + tf, l: tf + ' gap-candle %'});
+    opts.push({v: 'last.' + tf, l: tf + ' last candle %'});
+  }
+  el.rankSel.innerHTML = opts.map(o => '<option value="' + o.v + '">' + o.l + '</option>').join('');
+  el.rankSel.value = '24h';
+}
+
+let timer = null;
+function armTimer(){
+  clearTimeout(timer);
+  const ms = parseInt(el.refreshSel.value, 10);
+  if (ms <= 0){ state.nextAt = 0; return; }
+  state.nextAt = Date.now() + ms;
+  timer = setTimeout(async function(){
+    await refresh();
+    armTimer();
+  }, ms);
+}
+
+setInterval(function(){
+  el.weightText.textContent = state.usedWeight;
+  if (state.nextAt){
+    const left = Math.max(0, state.nextAt - Date.now());
+    el.countdownEl.textContent = 'next refresh ' + Math.ceil(left / 1000) + 's';
+  } else {
+    el.countdownEl.textContent = '';
+  }
+}, 1000);
+
+function init(){
+  buildRankOptions();
+  armTimer();
+  el.offsetInput.addEventListener('change', applyFilters);
+  el.minGapInput.addEventListener('input', applyFilters);
+  el.greenChk.addEventListener('change', applyFilters);
+  el.nextChk.addEventListener('change', applyFilters);
+  el.rankSel.addEventListener('change', function(){
+    state.sortKey = el.rankSel.value;
+    state.sortDir = -1;
+    applyFilters();
+  });
+  el.filterSel.addEventListener('change', applyFilters);
+  el.searchInput.addEventListener('input', applyFilters);
+  el.refreshSel.addEventListener('change', armTimer);
+  el.refreshBtn.addEventListener('click', function(){ refresh(); armTimer(); });
+  el.tbl.querySelectorAll('th[data-key]').forEach(function(th){
+    th.addEventListener('click', function(){
+      const k = th.dataset.key;
+      if (state.sortKey === k) state.sortDir *= -1;
+      else { state.sortKey = k; state.sortDir = -1; }
+      let found = false;
+      for (const o of el.rankSel.options){ if (o.value === k) found = true; }
+      if (found) el.rankSel.value = k;
+      applyFilters();
+    });
+  });
+  refresh();
+}
+init();
+})();
+</script>
+
+</body>
+</html>
